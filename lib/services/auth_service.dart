@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 final authServiceProvider = Provider<AuthService>((ref) => AuthService());
 
@@ -9,6 +10,7 @@ final authStateProvider = StreamProvider<User?>((ref) {
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final GoogleSignIn _googleSignIn = GoogleSignIn();
 
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
@@ -36,7 +38,30 @@ class AuthService {
     }
   }
 
+  Future<UserCredential?> signInWithGoogle() async {
+    try {
+      // 1. Start the Google Sign-In flow
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) return null; // Cancelled
+
+      // 2. Get the authentication details
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+
+      // 3. Create a new credential
+      final AuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      // 4. Sign in to Firebase with the credential
+      return await _auth.signInWithCredential(credential);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   Future<void> signOut() async {
+    await _googleSignIn.signOut();
     await _auth.signOut();
   }
 

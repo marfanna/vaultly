@@ -41,6 +41,22 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     }
   }
 
+  Future<void> _signInWithGoogle() async {
+    setState(() => _isLoading = true);
+    try {
+      final auth = ref.read(authServiceProvider);
+      await auth.signInWithGoogle();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Google Sign-In Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -146,6 +162,35 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
+                      ),
+                    ),
+                    VaultlyTheme.verticalSpace(2),
+
+                    // Google Sign-In Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: OutlinedButton.icon(
+                        onPressed: _isLoading ? null : _signInWithGoogle,
+                        icon: Image.network(
+                          'https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_\"G\"_Logo.svg',
+                          height: 24,
+                          errorBuilder: (context, error, stackTrace) => const Icon(Icons.g_mobiledata, size: 30),
+                        ),
+                        label: const Text(
+                          'Continue with Google',
+                          style: TextStyle(
+                            color: Colors.black87,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: Colors.grey.shade300),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
                       ),
                     ),
                     VaultlyTheme.verticalSpace(2),
