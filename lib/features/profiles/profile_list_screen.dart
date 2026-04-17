@@ -6,7 +6,7 @@ import '../../services/firebase_service.dart';
 import '../../services/auth_service.dart';
 import 'profile_dashboard_screen.dart';
 
-class ProfileListScreen extends consumerStatefulWidget {
+class ProfileListScreen extends ConsumerStatefulWidget {
   final VaultSection section;
 
   const ProfileListScreen({
@@ -15,10 +15,10 @@ class ProfileListScreen extends consumerStatefulWidget {
   });
 
   @override
-  consumerState<ProfileListScreen> createState() => _ProfileListScreenState();
+  ConsumerState<ProfileListScreen> createState() => _ProfileListScreenState();
 }
 
-class _ProfileListScreenState extends consumerState<ProfileListScreen> {
+class _ProfileListScreenState extends ConsumerState<ProfileListScreen> {
   bool _isActionInProgress = false;
 
   void _showProfileDialog({AppProfile? profile}) {

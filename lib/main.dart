@@ -15,7 +15,7 @@ void main() async {
   runApp(const ProviderScope(child: VaultlyApp()));
 }
 
-class VaultlyApp extends consumerWidget {
+class VaultlyApp extends ConsumerWidget {
   const VaultlyApp({super.key});
 
   @override
