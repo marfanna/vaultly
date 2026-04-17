@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme.dart';
 import '../../services/models.dart';
 import '../../services/firebase_service.dart';
+import '../../services/auth_service.dart';
 import 'profile_dashboard_screen.dart';
 
-class ProfileListScreen extends StatefulWidget {
+class ProfileListScreen extends consumerStatefulWidget {
   final VaultSection section;
 
   const ProfileListScreen({
@@ -13,10 +15,10 @@ class ProfileListScreen extends StatefulWidget {
   });
 
   @override
-  State<ProfileListScreen> createState() => _ProfileListScreenState();
+  consumerState<ProfileListScreen> createState() => _ProfileListScreenState();
 }
 
-class _ProfileListScreenState extends State<ProfileListScreen> {
+class _ProfileListScreenState extends consumerState<ProfileListScreen> {
   bool _isActionInProgress = false;
 
   void _showProfileDialog({AppProfile? profile}) {
@@ -62,7 +64,7 @@ class _ProfileListScreenState extends State<ProfileListScreen> {
                           if (profile == null) {
                             final newProfile = AppProfile(
                               id: '',
-                              userId: 'user123',
+                              userId: FirebaseService.currentUid ?? 'error',
                               section: widget.section,
                               name: nameController.text,
                               label: labelController.text.isEmpty ? null : labelController.text,
@@ -81,7 +83,6 @@ class _ProfileListScreenState extends State<ProfileListScreen> {
                           }
                         } catch (e) {
                           print('Profile Action Error: $e');
-                          // Since we popped, we show error as snackbar on parent
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text('Error saving profile: $e')),
@@ -136,6 +137,12 @@ class _ProfileListScreenState extends State<ProfileListScreen> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text(widget.section == VaultSection.personal ? 'Personal Vault' : 'Business Vault'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () => ref.read(authServiceProvider).signOut(),
+          ),
+        ],
       ),
       body: Stack(
         children: [
@@ -207,9 +214,7 @@ class _ProfileListScreenState extends State<ProfileListScreen> {
                           MaterialPageRoute(
                             builder: (context) => ProfileDashboardScreen(profile: profile),
                           ),
-                        ).then((_) {
-                          // Refresh dashboard state if needed
-                        });
+                        );
                       },
                     ),
                   );

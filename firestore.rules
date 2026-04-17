@@ -1,0 +1,15 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Profiles: Users can only see/edit their own profiles
+    match /profiles/{profileId} {
+      allow read, write: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow read, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+    
+    // Documents: Linked via profileId (Simplified for now, could be deeper)
+    match /documents/{docId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

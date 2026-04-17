@@ -1,25 +1,37 @@
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'models.dart';
 
 class FirebaseService {
   static final _firestore = FirebaseFirestore.instance;
   static final _storage = FirebaseStorage.instance;
+  static final _auth = FirebaseAuth.instance;
+
+  static String? get currentUid => _auth.currentUser?.uid;
 
   // --- Helpers ---
   
   static String sanitizePath(String segment) {
-    // Basic sanitization: keep alphanumeric and underscores/hyphens
-    return segment.replaceAll(RegExp(r'[^\w-]'), '_');
+    // Preserve the dot before the extension
+    final ext = segment.contains('.') ? '.${segment.split('.').last}' : '';
+    final base = segment.contains('.') 
+        ? segment.substring(0, segment.lastIndexOf('.')) 
+        : segment;
+    return base.replaceAll(RegExp(r'[^\w-]'), '_') + ext;
   }
 
   // --- Profiles ---
 
   static Stream<List<AppProfile>> streamProfiles(VaultSection section) {
+    final uid = currentUid;
+    if (uid == null) return const Stream.empty();
+
     return _firestore
         .collection('profiles')
         .where('section', isEqualTo: section.name)
+        .where('userId', isEqualTo: uid) // Secured by UID
         .snapshots()
         .map((snapshot) => snapshot.docs
             .map((doc) => AppProfile.fromFirestore(doc))
@@ -27,7 +39,14 @@ class FirebaseService {
   }
 
   static Future<void> createProfile(AppProfile profile) async {
-    await _firestore.collection('profiles').add(profile.toMap());
+    final uid = currentUid;
+    if (uid == null) throw Exception('User not authenticated');
+
+    // Create a new profile map ensuring current UID is used
+    final profileData = profile.toMap();
+    profileData['userId'] = uid;
+
+    await _firestore.collection('profiles').add(profileData);
   }
 
   static Future<void> updateProfile(AppProfile profile) async {
@@ -58,20 +77,15 @@ class FirebaseService {
 
       print('STORAGE: Bucket = ${_storage.bucket}');
       print('STORAGE: Full path = $path');
-      print('STORAGE: Uploading to path: $path');
-      final ref = _storage.ref().child(path); // ✅ use child()
       
-      // Use the simplest putFile pattern
+      final ref = _storage.ref().child(path);
       final taskSnapshot = await ref.putFile(file);
       
-      // Verification
-      final downloadUrl = await taskSnapshot.ref.getDownloadURL();
-      print('STORAGE: Success! URL: $downloadUrl');
-      return downloadUrl;
+      return await taskSnapshot.ref.getDownloadURL();
       
     } on FirebaseException catch (e) {
       print('STORAGE ERROR [${e.code}]: ${e.message}');
-      throw e; // Rethrow to show specific code in UI
+      throw e;
     } catch (e) {
       print('STORAGE GENERIC ERROR: $e');
       rethrow;
