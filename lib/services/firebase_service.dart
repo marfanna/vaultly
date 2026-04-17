@@ -56,6 +56,8 @@ class FirebaseService {
         throw Exception('Source file not found locally.');
       }
 
+      print('STORAGE: Bucket = ${_storage.bucket}');
+      print('STORAGE: Full path = $path');
       print('STORAGE: Uploading to path: $path');
       final ref = _storage.ref().child(path); // ✅ use child()
       
