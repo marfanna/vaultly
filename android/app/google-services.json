@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "164984237960",
+    "project_id": "valutly",
+    "storage_bucket": "valutly.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:164984237960:android:77fbeb6f4f69f3e9d8943d",
+        "android_client_info": {
+          "package_name": "com.example.vaultly"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDDqkQYChyunRnsZHFnC9GLfJx-BaX03K4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
