@@ -16,8 +16,10 @@ class AppProfile {
     required this.section,
     required this.name,
     this.label,
-    this.categories = const ['Medical', 'Legal', 'Financial', 'Personal'],
-  });
+    List<String>? categories,
+  }) : categories = categories ?? (section == VaultSection.business 
+            ? ['Legal', 'Financial', 'Bills', 'Staffing']
+            : ['Medical', 'Legal', 'Financial', 'Personal']);
 
   Map<String, dynamic> toMap() {
     return {
@@ -31,15 +33,18 @@ class AppProfile {
 
   factory AppProfile.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+    final section = VaultSection.values.byName(data['section']);
     return AppProfile(
       id: doc.id,
       userId: data['userId'],
-      section: VaultSection.values.byName(data['section']),
+      section: section,
       name: data['name'],
       label: data['label'],
       categories: data['categories'] != null 
           ? List<String>.from(data['categories']) 
-          : const ['Medical', 'Legal', 'Financial', 'Personal'],
+          : (section == VaultSection.business 
+              ? ['Legal', 'Financial', 'Bills', 'Staffing']
+              : ['Medical', 'Legal', 'Financial', 'Personal']),
     );
   }
 }

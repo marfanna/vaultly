@@ -1,29 +1,48 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme.dart';
 import '../../services/models.dart';
+import '../../services/auth_service.dart';
 import '../profiles/profile_list_screen.dart';
 
-class SegmentSelectionScreen extends StatelessWidget {
+class SegmentSelectionScreen extends ConsumerWidget {
   const SegmentSelectionScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text('VAULTLY'),
-        leading: IconButton(
-          icon: const Icon(Icons.menu),
-          onPressed: () {},
-        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_none),
             onPressed: () {},
           ),
-          const CircleAvatar(
-            backgroundColor: VaultlyTheme.primaryLightColor,
-            child: Icon(Icons.person, color: VaultlyTheme.primaryColor),
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'logout') {
+                ref.read(authServiceProvider).signOut();
+              }
+            },
+            offset: const Offset(0, 50),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout, color: Colors.red, size: 20),
+                    SizedBox(width: 8),
+                    Text('Logout', style: TextStyle(color: Colors.red)),
+                  ],
+                ),
+              ),
+            ],
+            child: const CircleAvatar(
+              backgroundColor: VaultlyTheme.primaryLightColor,
+              child: Icon(Icons.person, color: VaultlyTheme.primaryColor),
+            ),
           ),
           VaultlyTheme.horizontalSpace(2),
         ],

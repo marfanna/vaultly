@@ -242,7 +242,7 @@ class _OCRConfirmationScreenState extends State<OCRConfirmationScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Document successfully saved!')),
         );
-        Navigator.popUntil(context, (route) => route.isFirst);
+        Navigator.pop(context);
       }
     } on FirebaseException catch (e) {
       print('FIREBASE ERROR [${e.code}]: ${e.message}');

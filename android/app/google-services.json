@@ -12,7 +12,20 @@
           "package_name": "com.example.vaultly"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "164984237960-p83ljb609l73dh1lu6drft54c1cmt3il.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.vaultly",
+            "certificate_hash": "46a6cc9dd79542c7a07fd90e8e6a8be8cca0fb17"
+          }
+        },
+        {
+          "client_id": "164984237960-0guvf1sftdvg2akvh18m45sq8rc4tjam.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDDqkQYChyunRnsZHFnC9GLfJx-BaX03K4"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "164984237960-0guvf1sftdvg2akvh18m45sq8rc4tjam.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

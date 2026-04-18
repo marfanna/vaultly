@@ -60,9 +60,9 @@ class _ProfileDashboardScreenState extends State<ProfileDashboardScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => DocumentListScreen(
-          category: category,
-          profileName: currentProfile.name,
           profileId: currentProfile.id,
+          category: category,
+          viewMode: DocumentViewMode.category,
         ),
       ),
     );
@@ -142,6 +142,8 @@ class _ProfileDashboardScreenState extends State<ProfileDashboardScreen> {
       case 'legal': return Icons.gavel_outlined;
       case 'financial': return Icons.account_balance_wallet_outlined;
       case 'personal': return Icons.person_outline;
+      case 'bills': return Icons.receipt_long_outlined;
+      case 'staffing': return Icons.people_outline;
       default: return Icons.folder_outlined;
     }
   }
@@ -152,8 +154,75 @@ class _ProfileDashboardScreenState extends State<ProfileDashboardScreen> {
       case 'legal': return Colors.orange;
       case 'financial': return Colors.green;
       case 'personal': return Colors.purple;
+      case 'bills': return Colors.orangeAccent;
+      case 'staffing': return Colors.teal;
       default: return VaultlyTheme.primaryColor;
     }
+  }
+
+  void _confirmDeleteFolder(AppProfile profile, String category, int fileCount) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Folder?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Are you sure you want to delete the "$category" folder?'),
+            if (fileCount > 0) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, color: Colors.red),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'WARNING: This folder contains $fileCount file(s). Deleting it will NOT delete the files, but they will become harder to find.',
+                        style: const TextStyle(color: Colors.red, fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('CANCEL'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              try {
+                await FirebaseService.removeCategory(profile.id, category);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Folder "$category" deleted.')),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+                  );
+                }
+              }
+            },
+            child: const Text('DELETE', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -286,6 +355,11 @@ class _ProfileDashboardScreenState extends State<ProfileDashboardScreen> {
                                     count: categoryCounts[cat] ?? 0,
                                     color: _getColorForCategory(cat),
                                     onTap: () => _openFolder(cat, currentProfile),
+                                    onLongPress: () => _confirmDeleteFolder(
+                                      currentProfile, 
+                                      cat, 
+                                      categoryCounts[cat] ?? 0
+                                    ),
                                   );
                                 },
                               ),
@@ -301,9 +375,45 @@ class _ProfileDashboardScreenState extends State<ProfileDashboardScreen> {
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  _buildActionButton(Icons.history, 'Recent'),
-                                  _buildActionButton(Icons.star, 'Starred'),
-                                  _buildActionButton(Icons.notifications, 'Alerts'),
+                                  _buildActionButton(
+                                    Icons.history, 
+                                    'Recent',
+                                    onTap: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => DocumentListScreen(
+                                          profileId: currentProfile.id,
+                                          viewMode: DocumentViewMode.recent,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  _buildActionButton(
+                                    Icons.star, 
+                                    'Starred',
+                                    onTap: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => DocumentListScreen(
+                                          profileId: currentProfile.id,
+                                          viewMode: DocumentViewMode.starred,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  _buildActionButton(
+                                    Icons.notifications, 
+                                    'Alerts',
+                                    onTap: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => DocumentListScreen(
+                                          profileId: currentProfile.id,
+                                          viewMode: DocumentViewMode.alerts,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                                 ],
                               ),
                             ],
@@ -343,26 +453,30 @@ class _ProfileDashboardScreenState extends State<ProfileDashboardScreen> {
     );
   }
 
-  Widget _buildActionButton(IconData icon, String label) {
+  Widget _buildActionButton(IconData icon, String label, {VoidCallback? onTap}) {
     return Expanded(
       child: Card(
         color: VaultlyTheme.primaryLightColor.withOpacity(0.3),
         elevation: 0,
-        child: Padding(
-          padding: 2.paddingVertical,
-          child: Column(
-            children: [
-              Icon(icon, color: VaultlyTheme.primaryColor),
-              VaultlyTheme.verticalSpace(1),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: VaultlyTheme.primaryColor,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: 2.paddingVertical,
+            child: Column(
+              children: [
+                Icon(icon, color: VaultlyTheme.primaryColor),
+                VaultlyTheme.verticalSpace(1),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: VaultlyTheme.primaryColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

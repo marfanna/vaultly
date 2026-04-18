@@ -23,6 +23,7 @@ class VaultlyApp extends ConsumerWidget {
     final authState = ref.watch(authStateProvider);
 
     return MaterialApp(
+      key: ValueKey(authState.asData?.value?.uid ?? 'logged-out'),
       title: 'Vaultly',
       debugShowCheckedModeBanner: false,
       theme: VaultlyTheme.lightTheme,

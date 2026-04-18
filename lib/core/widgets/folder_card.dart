@@ -7,6 +7,7 @@ class FolderCard extends StatelessWidget {
   final int count;
   final Color color;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   const FolderCard({
     super.key,
@@ -15,12 +16,14 @@ class FolderCard extends StatelessWidget {
     required this.count,
     required this.color,
     required this.onTap,
+    this.onLongPress,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

@@ -63,9 +63,18 @@ class OCRService {
     return DateFormat('yyyy-MM-dd').format(DateTime.now());
   }
 
-  /// Suggests a file name based on category and extracted date
+  /// Suggests a file name based on extracted date (Format: DD-MM-YYYY)
   static String suggestFileName(String category, String profileName, String text) {
-    final date = extractDate(text);
-    return '${category}_${profileName}_$date';
+    // 1. Parse date from text
+    final rawDate = extractDate(text); // returns YYYY-MM-DD
+    
+    try {
+      // 2. Format to DD-MM-YYYY
+      final DateTime dt = DateFormat('yyyy-MM-dd').parse(rawDate);
+      return DateFormat('dd-MM-yyyy').format(dt);
+    } catch (e) {
+      // Fallback
+      return rawDate;
+    }
   }
 }

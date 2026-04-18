@@ -137,12 +137,7 @@ class _ProfileListScreenState extends ConsumerState<ProfileListScreen> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text(widget.section == VaultSection.personal ? 'Personal Vault' : 'Business Vault'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () => ref.read(authServiceProvider).signOut(),
-          ),
-        ],
+        actions: const [],
       ),
       body: Stack(
         children: [
@@ -175,8 +170,40 @@ class _ProfileListScreenState extends ConsumerState<ProfileListScreen> {
 
               return ListView.builder(
                 padding: 2.paddingAll,
-                itemCount: profiles.length,
+                itemCount: profiles.length + 1,
                 itemBuilder: (context, index) {
+                  if (index == profiles.length) {
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 80),
+                      color: VaultlyTheme.primaryLightColor.withOpacity(0.1),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: const BorderSide(color: VaultlyTheme.primaryColor),
+                      ),
+                      child: InkWell(
+                        onTap: () => _showProfileDialog(),
+                        borderRadius: BorderRadius.circular(16),
+                        child: Padding(
+                          padding: 3.paddingAll,
+                          child: const Column(
+                            children: [
+                              Icon(Icons.add_circle_outline, color: VaultlyTheme.primaryColor, size: 32),
+                              SizedBox(height: 8),
+                              Text(
+                                'ADD NEW PROFILE',
+                                style: TextStyle(
+                                  color: VaultlyTheme.primaryColor,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1.1,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                  
                   final profile = profiles[index];
                   return Card(
                     margin: const EdgeInsets.only(bottom: 16),
