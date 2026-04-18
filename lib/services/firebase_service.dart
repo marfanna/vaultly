@@ -13,14 +13,21 @@ class FirebaseService {
   static String? get currentUid => _auth.currentUser?.uid;
 
   // --- Helpers ---
-  
+
   static String sanitizePath(String segment) {
-    // Preserve the dot before the extension
-    final ext = segment.contains('.') ? '.${segment.split('.').last}' : '';
-    final base = segment.contains('.') 
-        ? segment.substring(0, segment.lastIndexOf('.')) 
-        : segment;
-    return base.replaceAll(RegExp(r'[^\w-]'), '_') + ext;
+    final lastDot = segment.lastIndexOf('.');
+    final hasExt = lastDot > 0 && lastDot < segment.length - 1;
+
+    if (hasExt) {
+      final base = segment
+          .substring(0, lastDot)
+          .replaceAll(RegExp(r'[^\w-]'), '_');
+      final ext = segment
+          .substring(lastDot + 1)
+          .replaceAll(RegExp(r'[^\w]'), '');
+      return '$base.$ext';
+    }
+    return segment.replaceAll(RegExp(r'[^\w-]'), '_');
   }
 
   static Future<File> compressImage(File file) async {
@@ -28,19 +35,15 @@ class FirebaseService {
     final image = img.decodeImage(imageBytes);
     if (image == null) return file;
 
-    // Resize to max 1080p while maintaining aspect ratio
     img.Image resized;
     if (image.width > 1080 || image.height > 1080) {
-      if (image.width > image.height) {
-        resized = img.copyResize(image, width: 1080);
-      } else {
-        resized = img.copyResize(image, height: 1080);
-      }
+      resized = image.width > image.height
+          ? img.copyResize(image, width: 1080)
+          : img.copyResize(image, height: 1080);
     } else {
       resized = image;
     }
 
-    // Compress as JPEG
     final compressedBytes = img.encodeJpg(resized, quality: 80);
     final compressedFile = File('${file.path}_compressed.jpg');
     await compressedFile.writeAsBytes(compressedBytes);
@@ -56,18 +59,16 @@ class FirebaseService {
     return _firestore
         .collection('profiles')
         .where('section', isEqualTo: section.name)
-        .where('userId', isEqualTo: uid) // Secured by UID
+        .where('userId', isEqualTo: uid)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => AppProfile.fromFirestore(doc))
-            .toList());
+        .map((snapshot) =>
+            snapshot.docs.map((doc) => AppProfile.fromFirestore(doc)).toList());
   }
 
   static Future<void> createProfile(AppProfile profile) async {
     final uid = currentUid;
     if (uid == null) throw Exception('User not authenticated');
 
-    // Create a new profile map ensuring current UID is used
     final profileData = profile.toMap();
     profileData['userId'] = uid;
 
@@ -75,11 +76,30 @@ class FirebaseService {
   }
 
   static Future<void> updateProfile(AppProfile profile) async {
-    await _firestore.collection('profiles').doc(profile.id).update(profile.toMap());
+    final uid = currentUid;
+    if (uid == null) throw Exception('User not authenticated');
+    if (profile.userId != uid) throw Exception('Access denied');
+
+    await _firestore
+        .collection('profiles')
+        .doc(profile.id)
+        .update(profile.toMap());
   }
 
   static Future<void> deleteProfile(String profileId) async {
-    final docs = await _firestore.collection('documents').where('profileId', isEqualTo: profileId).get();
+    final uid = currentUid;
+    if (uid == null) throw Exception('User not authenticated');
+
+    final profileDoc =
+        await _firestore.collection('profiles').doc(profileId).get();
+    if (!profileDoc.exists || profileDoc.data()?['userId'] != uid) {
+      throw Exception('Access denied');
+    }
+
+    final docs = await _firestore
+        .collection('documents')
+        .where('profileId', isEqualTo: profileId)
+        .get();
     for (var doc in docs.docs) {
       await doc.reference.delete();
     }
@@ -92,7 +112,8 @@ class FirebaseService {
     });
   }
 
-  static Future<void> removeCategory(String profileId, String category) async {
+  static Future<void> removeCategory(
+      String profileId, String category) async {
     await _firestore.collection('profiles').doc(profileId).update({
       'categories': FieldValue.arrayRemove([category])
     });
@@ -101,40 +122,30 @@ class FirebaseService {
   // --- Documents ---
 
   static Future<String> uploadFile(File file, String path) async {
+    if (!await file.exists()) {
+      throw Exception('Source file not found locally.');
+    }
+
+    File uploadFile = file;
+    final lowerPath = path.toLowerCase();
+    final isImage = lowerPath.endsWith('.jpg') ||
+        lowerPath.endsWith('.jpeg') ||
+        lowerPath.endsWith('.png');
+
     try {
-      if (!await file.exists()) {
-        throw Exception('Source file not found locally.');
-      }
-
-      print('STORAGE: Bucket = ${_storage.bucket}');
-      print('STORAGE: Full path = $path');
-      
-      
-      File uploadFile = file;
-      final isImage = path.toLowerCase().endsWith('.jpg') || 
-                      path.toLowerCase().endsWith('.jpeg') || 
-                      path.toLowerCase().endsWith('.png');
-
       if (isImage) {
         uploadFile = await compressImage(file);
       }
 
       final ref = _storage.ref().child(path);
       final taskSnapshot = await ref.putFile(uploadFile);
-      
-      // Cleanup compressed file if created
+      return await taskSnapshot.ref.getDownloadURL();
+    } on FirebaseException {
+      rethrow;
+    } finally {
       if (isImage && uploadFile.path != file.path) {
         await uploadFile.delete().catchError((_) => uploadFile);
       }
-
-      return await taskSnapshot.ref.getDownloadURL();
-      
-    } on FirebaseException catch (e) {
-      print('STORAGE ERROR [${e.code}]: ${e.message}');
-      throw e;
-    } catch (e) {
-      print('STORAGE GENERIC ERROR: $e');
-      rethrow;
     }
   }
 
@@ -148,19 +159,21 @@ class FirebaseService {
     bool starredOnly = false,
     int? limit,
   }) {
+    final uid = currentUid;
+    if (uid == null) return const Stream.empty();
+
     var query = _firestore
         .collection('documents')
-        .where('profileId', isEqualTo: profileId);
+        .where('profileId', isEqualTo: profileId)
+        .where('userId', isEqualTo: uid);
 
     if (category != null) {
       query = query.where('category', isEqualTo: category);
     }
-
     if (starredOnly) {
       query = query.where('isStarred', isEqualTo: true);
     }
 
-    // Order by newest first
     query = query.orderBy('createdAt', descending: true);
 
     if (limit != null) {
@@ -171,10 +184,37 @@ class FirebaseService {
         snapshot.docs.map((doc) => AppDocument.fromFirestore(doc)).toList());
   }
 
+  static Stream<List<AppDocument>> streamExpiringDocuments() {
+    final uid = currentUid;
+    if (uid == null) return const Stream.empty();
+
+    final now = DateTime.now();
+    final cutoff = now.add(const Duration(days: 90));
+
+    return _firestore
+        .collection('documents')
+        .where('userId', isEqualTo: uid)
+        .snapshots()
+        .map((s) {
+          final docs = s.docs.map((d) => AppDocument.fromFirestore(d)).toList();
+          return docs
+              .where((d) =>
+                  d.expiryDate != null &&
+                  !d.expiryDate!.isBefore(now.subtract(const Duration(days: 1))) &&
+                  d.expiryDate!.isBefore(cutoff))
+              .toList()
+            ..sort((a, b) => a.expiryDate!.compareTo(b.expiryDate!));
+        });
+  }
+
   static Stream<Map<String, int>> streamAllCategoryCounts(String profileId) {
+    final uid = currentUid;
+    if (uid == null) return const Stream.empty();
+
     return _firestore
         .collection('documents')
         .where('profileId', isEqualTo: profileId)
+        .where('userId', isEqualTo: uid)
         .snapshots()
         .map((snapshot) {
       final counts = <String, int>{};
@@ -186,11 +226,16 @@ class FirebaseService {
     });
   }
 
-  static Future<int> getDocumentCount(String profileId, String category) async {
+  static Future<int> getDocumentCount(
+      String profileId, String category) async {
+    final uid = currentUid;
+    if (uid == null) return 0;
+
     try {
       final snapshot = await _firestore
           .collection('documents')
           .where('profileId', isEqualTo: profileId)
+          .where('userId', isEqualTo: uid)
           .where('category', isEqualTo: category)
           .count()
           .get()
@@ -202,19 +247,25 @@ class FirebaseService {
   }
 
   static Future<void> deleteDocument(AppDocument doc) async {
-    // 1. Delete from Firestore
+    final uid = currentUid;
+    if (uid == null) throw Exception('User not authenticated');
+    if (doc.userId != uid) throw Exception('Access denied');
+
     await _firestore.collection('documents').doc(doc.id).delete();
-    
-    // 2. Delete from Storage
+
     try {
       final ref = _storage.refFromURL(doc.fileUrl);
       await ref.delete();
-    } catch (e) {
-      print('FIREBASE STORAGE DELETE ERROR: $e');
+    } on FirebaseException {
+      // Storage delete is best-effort; Firestore record is already removed.
     }
   }
 
   static Future<void> toggleDocumentStar(AppDocument doc) async {
+    final uid = currentUid;
+    if (uid == null) throw Exception('User not authenticated');
+    if (doc.userId != uid) throw Exception('Access denied');
+
     await _firestore.collection('documents').doc(doc.id).update({
       'isStarred': !doc.isStarred,
     });

@@ -2,6 +2,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:local_auth/local_auth.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/folder_card.dart';
 import '../../services/models.dart';
@@ -24,20 +27,109 @@ class ProfileDashboardScreen extends StatefulWidget {
 
 class _ProfileDashboardScreenState extends State<ProfileDashboardScreen> {
   bool _isProcessing = false;
-  bool _isStarred = false;
-  final TextEditingController _searchController = TextEditingController();
+  bool _isLocked = false;
+  final _localAuth = LocalAuthentication();
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
+  // ── Biometric lock ──────────────────────────────────────────────────────────
+
+  Future<void> _lockWithBiometrics() async {
+    Navigator.pop(context);
+    try {
+      final canAuth = await _localAuth.canCheckBiometrics ||
+          await _localAuth.isDeviceSupported();
+      if (!canAuth) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No biometrics available on this device.')),
+        );
+        return;
+      }
+      final authenticated = await _localAuth.authenticate(
+        localizedReason: 'Authenticate to lock this vault',
+      );
+      if (authenticated && mounted) {
+        setState(() => _isLocked = true);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Biometric authentication unavailable.')),
+      );
+    }
+  }
+
+  Future<void> _unlockWithBiometrics() async {
+    try {
+      final authenticated = await _localAuth.authenticate(
+        localizedReason: 'Authenticate to unlock this vault',
+      );
+      if (authenticated && mounted) setState(() => _isLocked = false);
+    } catch (_) {}
+  }
+
+  // ── Share vault ─────────────────────────────────────────────────────────────
+
+  Future<void> _shareVault(AppProfile profile, Map<String, int> counts) async {
+    Navigator.pop(context);
+    final total = counts.values.fold(0, (a, b) => a + b);
+    final lines = counts.entries
+        .where((e) => e.value > 0)
+        .map((e) => '  • ${e.key}: ${e.value} document${e.value == 1 ? '' : 's'}')
+        .join('\n');
+    final text =
+        '📁 ${profile.name} — Vaultly Vault\n\n$total document${total == 1 ? '' : 's'} stored:\n$lines\n\nManaged with Vaultly.';
+    await SharePlus.instance.share(ShareParams(text: text));
+  }
+
+  // ── Clear recent activity ───────────────────────────────────────────────────
+
+  Future<void> _clearRecentActivity() async {
+    Navigator.pop(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Clear Recent Activity?'),
+        content: const Text(
+            'This will clear your recently viewed documents history. Your documents will not be deleted.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('CANCEL'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('CLEAR', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('recent_viewed_${widget.profile.id}');
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Recent activity cleared.')),
+    );
+  }
 
   Future<void> _pickAndProcessDocument(AppProfile currentProfile) async {
     final result = await FilePicker.pickFiles(
-      type: FileType.image,
+      type: FileType.custom,
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf'],
     );
 
     if (result != null && result.files.single.path != null) {
       setState(() => _isProcessing = true);
-      
+
       final path = result.files.single.path!;
-      final extractedText = await OCRService.extractText(path);
-      
+      final isPdf = path.toLowerCase().endsWith('.pdf');
+      final extractedText = isPdf ? '' : await OCRService.extractText(path);
+
       setState(() => _isProcessing = false);
 
       if (mounted) {
@@ -47,6 +139,7 @@ class _ProfileDashboardScreenState extends State<ProfileDashboardScreen> {
             builder: (context) => OCRConfirmationScreen(
               file: File(path),
               extractedText: extractedText,
+              fileType: isPdf ? 'pdf' : 'image',
               profile: currentProfile,
             ),
           ),
@@ -93,7 +186,12 @@ class _ProfileDashboardScreenState extends State<ProfileDashboardScreen> {
                     );
                   }
                 } catch (e) {
-                  print('Add Folder Error: $e');
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('Failed to add folder. Please try again.')),
+                    );
+                  }
                 }
               }
             },
@@ -104,13 +202,13 @@ class _ProfileDashboardScreenState extends State<ProfileDashboardScreen> {
     );
   }
 
-  void _showProfileOptions() {
+  void _showProfileOptions(AppProfile profile, Map<String, int> counts) {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (context) => Container(
+      builder: (ctx) => Container(
         padding: const EdgeInsets.symmetric(vertical: 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -118,17 +216,17 @@ class _ProfileDashboardScreenState extends State<ProfileDashboardScreen> {
             ListTile(
               leading: const Icon(Icons.share_outlined),
               title: const Text('Share Vault'),
-              onTap: () => Navigator.pop(context),
+              onTap: () => _shareVault(profile, counts),
             ),
             ListTile(
               leading: const Icon(Icons.lock_outline),
               title: const Text('Lock with Biometrics'),
-              onTap: () => Navigator.pop(context),
+              onTap: _lockWithBiometrics,
             ),
             ListTile(
               leading: const Icon(Icons.delete_outline, color: Colors.red),
               title: const Text('Clear Recent Activity', style: TextStyle(color: Colors.red)),
-              onTap: () => Navigator.pop(context),
+              onTap: _clearRecentActivity,
             ),
           ],
         ),
@@ -142,6 +240,7 @@ class _ProfileDashboardScreenState extends State<ProfileDashboardScreen> {
       case 'legal': return Icons.gavel_outlined;
       case 'financial': return Icons.account_balance_wallet_outlined;
       case 'personal': return Icons.person_outline;
+      case 'education': return Icons.school_outlined;
       case 'bills': return Icons.receipt_long_outlined;
       case 'staffing': return Icons.people_outline;
       default: return Icons.folder_outlined;
@@ -154,6 +253,7 @@ class _ProfileDashboardScreenState extends State<ProfileDashboardScreen> {
       case 'legal': return Colors.orange;
       case 'financial': return Colors.green;
       case 'personal': return Colors.purple;
+      case 'education': return Colors.indigo;
       case 'bills': return Colors.orangeAccent;
       case 'staffing': return Colors.teal;
       default: return VaultlyTheme.primaryColor;
@@ -203,19 +303,19 @@ class _ProfileDashboardScreenState extends State<ProfileDashboardScreen> {
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
+              final messenger = ScaffoldMessenger.of(context);
               try {
                 await FirebaseService.removeCategory(profile.id, category);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Folder "$category" deleted.')),
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-                  );
-                }
+                messenger.showSnackBar(
+                  SnackBar(content: Text('Folder "$category" deleted.')),
+                );
+              } catch (_) {
+                messenger.showSnackBar(
+                  const SnackBar(
+                    content: Text('Failed to delete folder. Please try again.'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
               }
             },
             child: const Text('DELETE', style: TextStyle(color: Colors.red)),
@@ -247,13 +347,8 @@ class _ProfileDashboardScreenState extends State<ProfileDashboardScreen> {
                 title: Text(currentProfile.name),
                 actions: [
                   IconButton(
-                    icon: Icon(_isStarred ? Icons.star : Icons.star_border, 
-                              color: _isStarred ? Colors.amber : null),
-                    onPressed: () => setState(() => _isStarred = !_isStarred),
-                  ),
-                  IconButton(
                     icon: const Icon(Icons.more_vert),
-                    onPressed: _showProfileOptions,
+                    onPressed: () => _showProfileOptions(currentProfile, categoryCounts),
                   ),
                 ],
               ),
@@ -276,7 +371,7 @@ class _ProfileDashboardScreenState extends State<ProfileDashboardScreen> {
                               Text(
                                 currentProfile.section == VaultSection.personal ? 'PERSONAL VAULT' : 'BUSINESS VAULT',
                                 style: TextStyle(
-                                  color: Colors.white.withOpacity(0.8),
+                                  color: Colors.white.withValues(alpha: 0.8),
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold,
                                   letterSpacing: 1.2,
@@ -294,20 +389,31 @@ class _ProfileDashboardScreenState extends State<ProfileDashboardScreen> {
                               VaultlyTheme.verticalSpace(3),
                               
                               // Search Bar
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(16),
+                              GestureDetector(
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => DocumentListScreen(
+                                      profileId: currentProfile.id,
+                                      viewMode: DocumentViewMode.search,
+                                    ),
+                                  ),
                                 ),
-                                child: TextField(
-                                  controller: _searchController,
-                                  style: const TextStyle(color: Colors.white),
-                                  decoration: const InputDecoration(
-                                    icon: Icon(Icons.search, color: Colors.white),
-                                    hintText: 'Search documents...',
-                                    hintStyle: TextStyle(color: Colors.white70),
-                                    border: InputBorder.none,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.search, color: Colors.white, size: 20),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        'Search documents...',
+                                        style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 15),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
@@ -424,7 +530,7 @@ class _ProfileDashboardScreenState extends State<ProfileDashboardScreen> {
                   ),
                   if (_isProcessing)
                     Container(
-                      color: Colors.black.withOpacity(0.5),
+                      color: Colors.black.withValues(alpha: 0.5),
                       child: const Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
@@ -434,6 +540,40 @@ class _ProfileDashboardScreenState extends State<ProfileDashboardScreen> {
                             Text(
                               'Analyzing Document...',
                               style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  if (_isLocked)
+                    Positioned.fill(
+                      child: Container(
+                        color: const Color(0xFF0A0A12),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.lock_rounded, size: 64, color: Colors.white54),
+                            const SizedBox(height: 24),
+                            const Text(
+                              'Vault Locked',
+                              style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              currentProfile.name,
+                              style: const TextStyle(color: Colors.white54, fontSize: 14),
+                            ),
+                            const SizedBox(height: 40),
+                            ElevatedButton.icon(
+                              onPressed: _unlockWithBiometrics,
+                              icon: const Icon(Icons.fingerprint),
+                              label: const Text('Unlock'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: VaultlyTheme.primaryColor,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              ),
                             ),
                           ],
                         ),
@@ -456,7 +596,7 @@ class _ProfileDashboardScreenState extends State<ProfileDashboardScreen> {
   Widget _buildActionButton(IconData icon, String label, {VoidCallback? onTap}) {
     return Expanded(
       child: Card(
-        color: VaultlyTheme.primaryLightColor.withOpacity(0.3),
+        color: VaultlyTheme.primaryLightColor.withValues(alpha: 0.3),
         elevation: 0,
         child: InkWell(
           onTap: onTap,

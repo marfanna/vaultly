@@ -17,9 +17,10 @@ class AppProfile {
     required this.name,
     this.label,
     List<String>? categories,
-  }) : categories = categories ?? (section == VaultSection.business 
-            ? ['Legal', 'Financial', 'Bills', 'Staffing']
-            : ['Medical', 'Legal', 'Financial', 'Personal']);
+  }) : categories = categories ??
+            (section == VaultSection.business
+                ? ['Legal', 'Financial', 'Bills', 'Staffing']
+                : ['Medical', 'Legal', 'Financial', 'Personal', 'Education']);
 
   Map<String, dynamic> toMap() {
     return {
@@ -32,28 +33,31 @@ class AppProfile {
   }
 
   factory AppProfile.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    final section = VaultSection.values.byName(data['section']);
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+    final sectionName = data['section'] as String? ?? VaultSection.personal.name;
+    final section = VaultSection.values.firstWhere(
+      (v) => v.name == sectionName,
+      orElse: () => VaultSection.personal,
+    );
     return AppProfile(
       id: doc.id,
-      userId: data['userId'],
+      userId: data['userId'] as String? ?? '',
       section: section,
-      name: data['name'],
-      label: data['label'],
-      categories: data['categories'] != null 
-          ? List<String>.from(data['categories']) 
-          : (section == VaultSection.business 
-              ? ['Legal', 'Financial', 'Bills', 'Staffing']
-              : ['Medical', 'Legal', 'Financial', 'Personal']),
+      name: data['name'] as String? ?? '',
+      label: data['label'] as String?,
+      categories: data['categories'] != null
+          ? List<String>.from(data['categories'] as List)
+          : null,
     );
   }
 }
 
 class AppDocument {
   final String id;
+  final String userId;
   final String profileId;
   final String fileUrl;
-  final String fileType; // image, pdf
+  final String fileType;
   final String category;
   final String fileName;
   final DateTime createdAt;
@@ -62,6 +66,7 @@ class AppDocument {
 
   AppDocument({
     required this.id,
+    required this.userId,
     required this.profileId,
     required this.fileUrl,
     required this.fileType,
@@ -74,6 +79,7 @@ class AppDocument {
 
   Map<String, dynamic> toMap() {
     return {
+      'userId': userId,
       'profileId': profileId,
       'fileUrl': fileUrl,
       'fileType': fileType,
@@ -86,19 +92,18 @@ class AppDocument {
   }
 
   factory AppDocument.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+    final data = doc.data() as Map<String, dynamic>? ?? {};
     return AppDocument(
       id: doc.id,
-      profileId: data['profileId'],
-      fileUrl: data['fileUrl'],
-      fileType: data['fileType'],
-      category: data['category'],
-      fileName: data['fileName'],
-      createdAt: (data['createdAt'] as Timestamp).toDate(),
-      expiryDate: data['expiryDate'] != null 
-          ? (data['expiryDate'] as Timestamp).toDate() 
-          : null,
-      isStarred: data['isStarred'] ?? false,
+      userId: data['userId'] as String? ?? '',
+      profileId: data['profileId'] as String? ?? '',
+      fileUrl: data['fileUrl'] as String? ?? '',
+      fileType: data['fileType'] as String? ?? 'image',
+      category: data['category'] as String? ?? 'Personal',
+      fileName: data['fileName'] as String? ?? doc.id,
+      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      expiryDate: (data['expiryDate'] as Timestamp?)?.toDate(),
+      isStarred: data['isStarred'] as bool? ?? false,
     );
   }
 }

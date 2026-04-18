@@ -9,32 +9,43 @@ class OCRService {
     RegExp(r'(\d{1,2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{2,4})', caseSensitive: false), // 12 April 2026
   ];
 
-  /// Simple keyword-based classification
-  static String classifyDocument(String text) {
-    text = text.toLowerCase();
-    
-    if (text.contains('prescription') || 
-        text.contains('doctor') || 
-        text.contains('hospital') || 
-        text.contains('rx')) {
-      return 'Medical';
+  static const Map<String, List<String>> _builtinKeywords = {
+    'Medical':    ['prescription', 'doctor', 'hospital', 'clinic', 'rx', 'patient', 'diagnosis', 'medicine'],
+    'Legal':      ['agreement', 'deed', 'contract', 'legal', 'attorney', 'court', 'lawsuit', 'notary'],
+    'Financial':  ['invoice', 'bill', 'receipt', 'tax', 'financial', 'payment', 'statement', 'balance'],
+    'Education':  ['school', 'university', 'college', 'degree', 'transcript', 'certificate', 'student', 'enrollment', 'grade', 'academic'],
+    'Personal':   [],
+  };
+
+  /// Keyword-based classification against built-in categories, then custom ones.
+  /// Pass [availableCategories] (the profile's full category list) so custom
+  /// folders are also considered as suggestions.
+  static String classifyDocument(String text, {List<String>? availableCategories}) {
+    final lower = text.toLowerCase();
+
+    // 1. Try built-in keyword matching (only if that category exists in profile)
+    for (final entry in _builtinKeywords.entries) {
+      if (entry.value.isEmpty) continue;
+      final inProfile = availableCategories == null || availableCategories.contains(entry.key);
+      if (inProfile && entry.value.any((kw) => lower.contains(kw))) {
+        return entry.key;
+      }
     }
-    
-    if (text.contains('agreement') || 
-        text.contains('deed') || 
-        text.contains('contract') ||
-        text.contains('legal')) {
-      return 'Legal';
+
+    // 2. Try matching custom category names directly against OCR text
+    if (availableCategories != null) {
+      for (final cat in availableCategories) {
+        if (_builtinKeywords.containsKey(cat)) continue; // already checked above
+        if (lower.contains(cat.toLowerCase())) return cat;
+      }
     }
-    
-    if (text.contains('invoice') || 
-        text.contains('bill') || 
-        text.contains('receipt') || 
-        text.contains('tax') ||
-        text.contains('financial')) {
-      return 'Financial';
+
+    // 3. Fall back to 'Personal' if present, else first available category
+    if (availableCategories != null && availableCategories.isNotEmpty) {
+      return availableCategories.contains('Personal')
+          ? 'Personal'
+          : availableCategories.first;
     }
-    
     return 'Personal';
   }
 
@@ -46,8 +57,7 @@ class OCRService {
         language: 'eng',
       );
       return text;
-    } catch (e) {
-      print('OCR Error: $e');
+    } catch (_) {
       return '';
     }
   }
@@ -64,16 +74,12 @@ class OCRService {
   }
 
   /// Suggests a file name based on extracted date (Format: DD-MM-YYYY)
-  static String suggestFileName(String category, String profileName, String text) {
-    // 1. Parse date from text
-    final rawDate = extractDate(text); // returns YYYY-MM-DD
-    
+  static String suggestFileName(String category, String text) {
+    final rawDate = extractDate(text);
     try {
-      // 2. Format to DD-MM-YYYY
       final DateTime dt = DateFormat('yyyy-MM-dd').parse(rawDate);
       return DateFormat('dd-MM-yyyy').format(dt);
-    } catch (e) {
-      // Fallback
+    } catch (_) {
       return rawDate;
     }
   }

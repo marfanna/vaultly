@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme.dart';
 import '../../services/models.dart';
-import '../../services/auth_service.dart';
 import '../profiles/profile_list_screen.dart';
+import '../account/account_screen.dart';
+import '../alerts/all_alerts_screen.dart';
 
 class SegmentSelectionScreen extends ConsumerWidget {
   const SegmentSelectionScreen({super.key});
@@ -17,28 +18,16 @@ class SegmentSelectionScreen extends ConsumerWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_none),
-            onPressed: () {},
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AllAlertsScreen()),
+            ),
           ),
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              if (value == 'logout') {
-                ref.read(authServiceProvider).signOut();
-              }
-            },
-            offset: const Offset(0, 50),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'logout',
-                child: Row(
-                  children: [
-                    Icon(Icons.logout, color: Colors.red, size: 20),
-                    SizedBox(width: 8),
-                    Text('Logout', style: TextStyle(color: Colors.red)),
-                  ],
-                ),
-              ),
-            ],
+          GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AccountScreen()),
+            ),
             child: const CircleAvatar(
               backgroundColor: VaultlyTheme.primaryLightColor,
               child: Icon(Icons.person, color: VaultlyTheme.primaryColor),
@@ -122,7 +111,7 @@ class SegmentSelectionScreen extends ConsumerWidget {
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: color.withOpacity(0.3),
+              color: color.withValues(alpha: 0.3),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -133,7 +122,7 @@ class SegmentSelectionScreen extends ConsumerWidget {
             Container(
               padding: 2.paddingAll,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withValues(alpha: 0.2),
                 shape: BoxShape.circle,
               ),
               child: Icon(icon, color: Colors.white, size: 32),
@@ -154,7 +143,7 @@ class SegmentSelectionScreen extends ConsumerWidget {
                   Text(
                     subtitle,
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.8),
+                      color: Colors.white.withValues(alpha: 0.8),
                       fontSize: 14,
                     ),
                   ),

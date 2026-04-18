@@ -16,48 +16,28 @@ class AuthService {
 
   User? get currentUser => _auth.currentUser;
 
-  Future<UserCredential?> signIn(String email, String password) async {
-    try {
-      return await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-    } catch (e) {
-      rethrow;
-    }
+  Future<UserCredential> signIn(String email, String password) {
+    return _auth.signInWithEmailAndPassword(email: email, password: password);
   }
 
-  Future<UserCredential?> signUp(String email, String password) async {
-    try {
-      return await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-    } catch (e) {
-      rethrow;
-    }
+  Future<UserCredential> signUp(String email, String password) {
+    return _auth.createUserWithEmailAndPassword(
+        email: email, password: password);
   }
 
   Future<UserCredential?> signInWithGoogle() async {
-    try {
-      // 1. Start the Google Sign-In flow
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) return null; // Cancelled
+    final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+    if (googleUser == null) return null;
 
-      // 2. Get the authentication details
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+    final GoogleSignInAuthentication googleAuth =
+        await googleUser.authentication;
 
-      // 3. Create a new credential
-      final AuthCredential credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
+    final credential = GoogleAuthProvider.credential(
+      accessToken: googleAuth.accessToken,
+      idToken: googleAuth.idToken,
+    );
 
-      // 4. Sign in to Firebase with the credential
-      return await _auth.signInWithCredential(credential);
-    } catch (e) {
-      rethrow;
-    }
+    return _auth.signInWithCredential(credential);
   }
 
   Future<void> signOut() async {
@@ -65,7 +45,7 @@ class AuthService {
     await _auth.signOut();
   }
 
-  Future<void> resetPassword(String email) async {
-    await _auth.sendPasswordResetEmail(email: email);
+  Future<void> resetPassword(String email) {
+    return _auth.sendPasswordResetEmail(email: email);
   }
 }

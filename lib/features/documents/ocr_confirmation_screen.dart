@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme.dart';
@@ -11,12 +10,14 @@ class OCRConfirmationScreen extends StatefulWidget {
   final File file;
   final String extractedText;
   final AppProfile profile;
+  final String fileType;
 
   const OCRConfirmationScreen({
     super.key,
     required this.file,
     required this.extractedText,
     required this.profile,
+    this.fileType = 'image',
   });
 
   @override
@@ -34,14 +35,21 @@ class _OCRConfirmationScreenState extends State<OCRConfirmationScreen> {
   void initState() {
     super.initState();
     _textController = TextEditingController(text: widget.extractedText);
-    _category = OCRService.classifyDocument(widget.extractedText);
-    
-    if (!widget.profile.categories.contains(_category)) {
-      _category = widget.profile.categories.isNotEmpty ? widget.profile.categories.first : 'Personal';
-    }
+    _category = OCRService.classifyDocument(
+      widget.extractedText,
+      availableCategories: widget.profile.categories,
+    );
 
-    final suggestedName = OCRService.suggestFileName(_category, widget.profile.name, widget.extractedText);
+    final suggestedName =
+        OCRService.suggestFileName(_category, widget.extractedText);
     _nameController = TextEditingController(text: suggestedName);
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    _nameController.dispose();
+    super.dispose();
   }
 
   Future<void> _selectExpiryDate() async {
@@ -70,15 +78,29 @@ class _OCRConfirmationScreenState extends State<OCRConfirmationScreen> {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(24),
-              child: Image.file(
-                widget.file,
-                height: 200,
-                width: double.infinity,
-                fit: BoxFit.cover,
-              ),
+              child: widget.fileType == 'pdf'
+                  ? Container(
+                      height: 200,
+                      width: double.infinity,
+                      color: Colors.grey.shade100,
+                      alignment: Alignment.center,
+                      child: const Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.picture_as_pdf, size: 64, color: Colors.grey),
+                          SizedBox(height: 12),
+                          Text('PDF Document', style: TextStyle(color: Colors.grey)),
+                        ],
+                      ),
+                    )
+                  : Image.file(
+                      widget.file,
+                      height: 200,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
             ),
             VaultlyTheme.verticalSpace(3),
-            
             const Text(
               'Extracted Text',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -97,7 +119,6 @@ class _OCRConfirmationScreenState extends State<OCRConfirmationScreen> {
               ),
             ),
             VaultlyTheme.verticalSpace(3),
-            
             const Text(
               'Document Details',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -115,17 +136,18 @@ class _OCRConfirmationScreenState extends State<OCRConfirmationScreen> {
               controller: _nameController,
             ),
             VaultlyTheme.verticalSpace(3),
-            
             ListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Expiry Date (Optional)', style: TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text(_expiryDate == null ? 'Not set' : DateFormat('yyyy-MM-dd').format(_expiryDate!)),
-              trailing: const Icon(Icons.calendar_today, color: VaultlyTheme.primaryColor),
+              title: const Text('Expiry Date (Optional)',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text(_expiryDate == null
+                  ? 'Not set'
+                  : DateFormat('yyyy-MM-dd').format(_expiryDate!)),
+              trailing:
+                  const Icon(Icons.calendar_today, color: VaultlyTheme.primaryColor),
               onTap: _selectExpiryDate,
             ),
-            
             VaultlyTheme.verticalSpace(4),
-            
             SizedBox(
               width: double.infinity,
               height: 60,
@@ -176,7 +198,8 @@ class _OCRConfirmationScreenState extends State<OCRConfirmationScreen> {
             child: DropdownButton<String>(
               value: value,
               isExpanded: true,
-              items: items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+              items:
+                  items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
               onChanged: onChanged,
             ),
           ),
@@ -210,56 +233,57 @@ class _OCRConfirmationScreenState extends State<OCRConfirmationScreen> {
   }
 
   Future<void> _saveDocument() async {
+    final uid = FirebaseService.currentUid;
+    if (uid == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Not authenticated. Please sign in again.')),
+      );
+      return;
+    }
+
     setState(() => _isSaving = true);
-    
+
     try {
       final profileId = widget.profile.id;
       if (profileId.isEmpty) throw Exception('Profile ID is missing.');
 
-      // 1. Simplify path
-      final cleanName = FirebaseService.sanitizePath(_nameController.text);
+      final cleanName = FirebaseService.sanitizePath(_nameController.text.trim());
+      final safeCategory = FirebaseService.sanitizePath(_category);
       final uniqueFileName = '${DateTime.now().millisecondsSinceEpoch}_$cleanName';
-      final storagePath = 'vault/${widget.profile.section.name}/$profileId/$_category/$uniqueFileName';
-      
-      // 2. Upload
+      final storagePath =
+          'vault/${widget.profile.section.name}/$profileId/$safeCategory/$uniqueFileName';
+
       final fileUrl = await FirebaseService.uploadFile(widget.file, storagePath);
-      
-      // 3. Save Metadata
+
       final doc = AppDocument(
         id: '',
+        userId: uid,
         profileId: profileId,
         fileUrl: fileUrl,
-        fileType: 'image',
+        fileType: widget.fileType,
         category: _category,
-        fileName: _nameController.text,
+        fileName: _nameController.text.trim(),
         createdAt: DateTime.now(),
         expiryDate: _expiryDate,
       );
-      
+
       await FirebaseService.saveDocument(doc);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Document successfully saved!')),
         );
         Navigator.pop(context);
       }
-    } on FirebaseException catch (e) {
-      print('FIREBASE ERROR [${e.code}]: ${e.message}');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Firebase Error [${e.code}]: ${e.message}'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 8),
-          ),
-        );
-      }
     } catch (e) {
-      print('GENERIC ERROR: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          const SnackBar(
+            content: Text('Failed to save document. Please try again.'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 4),
+          ),
         );
       }
     } finally {

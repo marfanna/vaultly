@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme.dart';
 import '../../services/models.dart';
 import '../../services/firebase_service.dart';
-import '../../services/auth_service.dart';
 import 'profile_dashboard_screen.dart';
 
 class ProfileListScreen extends ConsumerStatefulWidget {
@@ -24,79 +23,107 @@ class _ProfileListScreenState extends ConsumerState<ProfileListScreen> {
   void _showProfileDialog({AppProfile? profile}) {
     final nameController = TextEditingController(text: profile?.name);
     final labelController = TextEditingController(text: profile?.label);
-    bool _isLoadingInDialog = false;
 
     showDialog(
       context: context,
-      barrierDismissible: !_isLoadingInDialog,
       builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(profile == null ? 'Add New Profile' : 'Edit Profile'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                enabled: !_isLoadingInDialog,
-                decoration: const InputDecoration(labelText: 'Name (e.g., John Doe)'),
+        builder: (context, setDialogState) {
+          bool isLoading = false;
+
+          return StatefulBuilder(
+            builder: (context, setInnerState) => AlertDialog(
+              title: Text(profile == null ? 'Add New Profile' : 'Edit Profile'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    enabled: !isLoading,
+                    decoration:
+                        const InputDecoration(labelText: 'Name (e.g., John Doe)'),
+                  ),
+                  TextField(
+                    controller: labelController,
+                    enabled: !isLoading,
+                    decoration: const InputDecoration(
+                        labelText: 'Label (e.g., Father, Client A)'),
+                  ),
+                ],
               ),
-              TextField(
-                controller: labelController,
-                enabled: !_isLoadingInDialog,
-                decoration: const InputDecoration(labelText: 'Label (e.g., Father, Client A)'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: _isLoadingInDialog ? null : () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: _isLoadingInDialog
-                  ? null
-                  : () async {
-                      if (nameController.text.isNotEmpty) {
-                        setDialogState(() => _isLoadingInDialog = true);
-                        try {
-                          Navigator.of(context, rootNavigator: true).pop(); // Immediate pop
-                          
-                          if (profile == null) {
-                            final newProfile = AppProfile(
-                              id: '',
-                              userId: FirebaseService.currentUid ?? 'error',
-                              section: widget.section,
-                              name: nameController.text,
-                              label: labelController.text.isEmpty ? null : labelController.text,
+              actions: [
+                TextButton(
+                  onPressed:
+                      isLoading ? null : () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: isLoading
+                      ? null
+                      : () async {
+                          final name = nameController.text.trim();
+                          if (name.isEmpty) return;
+
+                          final uid = FirebaseService.currentUid;
+                          final messenger = ScaffoldMessenger.of(context);
+
+                          if (uid == null) {
+                            Navigator.pop(context);
+                            messenger.showSnackBar(
+                              const SnackBar(
+                                  content: Text(
+                                      'Not authenticated. Please sign in again.')),
                             );
-                            await FirebaseService.createProfile(newProfile);
-                          } else {
-                            final updatedProfile = AppProfile(
-                              id: profile.id,
-                              userId: profile.userId,
-                              section: profile.section,
-                              name: nameController.text,
-                              label: labelController.text.isEmpty ? null : labelController.text,
-                              categories: profile.categories,
-                            );
-                            await FirebaseService.updateProfile(updatedProfile);
+                            return;
                           }
-                        } catch (e) {
-                          print('Profile Action Error: $e');
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Error saving profile: $e')),
+
+                          setInnerState(() => isLoading = true);
+                          Navigator.of(context, rootNavigator: true).pop();
+
+                          try {
+                            if (profile == null) {
+                              final newProfile = AppProfile(
+                                id: '',
+                                userId: uid,
+                                section: widget.section,
+                                name: name,
+                                label: labelController.text.trim().isEmpty
+                                    ? null
+                                    : labelController.text.trim(),
+                              );
+                              await FirebaseService.createProfile(newProfile);
+                            } else {
+                              final updatedProfile = AppProfile(
+                                id: profile.id,
+                                userId: profile.userId,
+                                section: profile.section,
+                                name: name,
+                                label: labelController.text.trim().isEmpty
+                                    ? null
+                                    : labelController.text.trim(),
+                                categories: profile.categories,
+                              );
+                              await FirebaseService.updateProfile(updatedProfile);
+                            }
+                          } catch (e) {
+                            messenger.showSnackBar(
+                              const SnackBar(
+                                  content: Text(
+                                      'Failed to save profile. Please try again.')),
                             );
                           }
-                        }
-                      }
-                    },
-              child: _isLoadingInDialog 
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) 
-                  : const Text('Save'),
+                        },
+                  child: isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child:
+                              CircularProgressIndicator(strokeWidth: 2))
+                      : const Text('Save'),
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -106,7 +133,8 @@ class _ProfileListScreenState extends ConsumerState<ProfileListScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Profile?'),
-        content: Text('Are you sure you want to delete ${profile.name}? This will also delete all associated documents.'),
+        content: Text(
+            'Are you sure you want to delete ${profile.name}? This will also delete all associated documents.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -115,7 +143,8 @@ class _ProfileListScreenState extends ConsumerState<ProfileListScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+            child:
+                const Text('Delete', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -125,6 +154,14 @@ class _ProfileListScreenState extends ConsumerState<ProfileListScreen> {
       setState(() => _isActionInProgress = true);
       try {
         await FirebaseService.deleteProfile(profile.id);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content:
+                    Text('Failed to delete profile. Please try again.')),
+          );
+        }
       } finally {
         if (mounted) setState(() => _isActionInProgress = false);
       }
@@ -136,7 +173,9 @@ class _ProfileListScreenState extends ConsumerState<ProfileListScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text(widget.section == VaultSection.personal ? 'Personal Vault' : 'Business Vault'),
+        title: Text(widget.section == VaultSection.personal
+            ? 'Personal Vault'
+            : 'Business Vault'),
         actions: const [],
       ),
       body: Stack(
@@ -147,17 +186,19 @@ class _ProfileListScreenState extends ConsumerState<ProfileListScreen> {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
               }
-              
+
               final profiles = snapshot.data ?? [];
-              
+
               if (profiles.isEmpty) {
                 return Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.person_add_outlined, size: 64, color: Colors.grey.shade300),
+                      Icon(Icons.person_add_outlined,
+                          size: 64, color: Colors.grey.shade300),
                       VaultlyTheme.verticalSpace(2),
-                      const Text('No profiles found.', style: TextStyle(color: Colors.grey)),
+                      const Text('No profiles found.',
+                          style: TextStyle(color: Colors.grey)),
                       VaultlyTheme.verticalSpace(1),
                       TextButton(
                         onPressed: () => _showProfileDialog(),
@@ -175,10 +216,11 @@ class _ProfileListScreenState extends ConsumerState<ProfileListScreen> {
                   if (index == profiles.length) {
                     return Card(
                       margin: const EdgeInsets.only(bottom: 80),
-                      color: VaultlyTheme.primaryLightColor.withOpacity(0.1),
+                      color: VaultlyTheme.primaryLightColor.withValues(alpha: 0.1),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
-                        side: const BorderSide(color: VaultlyTheme.primaryColor),
+                        side: const BorderSide(
+                            color: VaultlyTheme.primaryColor),
                       ),
                       child: InkWell(
                         onTap: () => _showProfileDialog(),
@@ -187,7 +229,8 @@ class _ProfileListScreenState extends ConsumerState<ProfileListScreen> {
                           padding: 3.paddingAll,
                           child: const Column(
                             children: [
-                              Icon(Icons.add_circle_outline, color: VaultlyTheme.primaryColor, size: 32),
+                              Icon(Icons.add_circle_outline,
+                                  color: VaultlyTheme.primaryColor, size: 32),
                               SizedBox(height: 8),
                               Text(
                                 'ADD NEW PROFILE',
@@ -203,7 +246,7 @@ class _ProfileListScreenState extends ConsumerState<ProfileListScreen> {
                       ),
                     );
                   }
-                  
+
                   final profile = profiles[index];
                   return Card(
                     margin: const EdgeInsets.only(bottom: 16),
@@ -213,8 +256,12 @@ class _ProfileListScreenState extends ConsumerState<ProfileListScreen> {
                         backgroundColor: VaultlyTheme.primaryColor,
                         child: Icon(Icons.person, color: Colors.white),
                       ),
-                      title: Text(profile.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: profile.label != null ? Text(profile.label!) : null,
+                      title: Text(profile.name,
+                          style:
+                              const TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: profile.label != null
+                          ? Text(profile.label!)
+                          : null,
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -227,8 +274,12 @@ class _ProfileListScreenState extends ConsumerState<ProfileListScreen> {
                               }
                             },
                             itemBuilder: (context) => [
-                              const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                              const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: Colors.red))),
+                              const PopupMenuItem(
+                                  value: 'edit', child: Text('Edit')),
+                              const PopupMenuItem(
+                                  value: 'delete',
+                                  child: Text('Delete',
+                                      style: TextStyle(color: Colors.red))),
                             ],
                             icon: const Icon(Icons.more_vert),
                           ),
@@ -239,7 +290,8 @@ class _ProfileListScreenState extends ConsumerState<ProfileListScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => ProfileDashboardScreen(profile: profile),
+                            builder: (context) =>
+                                ProfileDashboardScreen(profile: profile),
                           ),
                         );
                       },
