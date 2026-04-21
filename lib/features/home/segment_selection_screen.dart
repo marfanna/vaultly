@@ -14,27 +14,33 @@ class SegmentSelectionScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('VAULTLY'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_none),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AllAlertsScreen()),
+        automaticallyImplyLeading: false,
+        title: Row(
+          children: [
+            GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AccountScreen()),
+              ),
+              child: const CircleAvatar(
+                backgroundColor: VaultlyTheme.primaryLightColor,
+                child: Icon(Icons.person, color: VaultlyTheme.primaryColor),
+              ),
             ),
-          ),
-          GestureDetector(
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AccountScreen()),
+            const Expanded(
+              child: Center(
+                child: Text('VAULTLY'),
+              ),
             ),
-            child: const CircleAvatar(
-              backgroundColor: VaultlyTheme.primaryLightColor,
-              child: Icon(Icons.person, color: VaultlyTheme.primaryColor),
+            IconButton(
+              icon: const Icon(Icons.notifications_none),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AllAlertsScreen()),
+              ),
             ),
-          ),
-          VaultlyTheme.horizontalSpace(2),
-        ],
+          ],
+        ),
       ),
       body: Padding(
         padding: 3.paddingHorizontal,

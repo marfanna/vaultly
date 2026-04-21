@@ -41,6 +41,43 @@
           ]
         }
       }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:164984237960:android:afaf89045bcdccfdd8943d",
+        "android_client_info": {
+          "package_name": "io.vaultly.vaultly"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "164984237960-m1b49r281g6bgqtlnmbs49tj648s44kb.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "io.vaultly.vaultly",
+            "certificate_hash": "3b48b4f6abd7468cad18c78a01a276d37d36bccd"
+          }
+        },
+        {
+          "client_id": "164984237960-0guvf1sftdvg2akvh18m45sq8rc4tjam.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDDqkQYChyunRnsZHFnC9GLfJx-BaX03K4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "164984237960-0guvf1sftdvg2akvh18m45sq8rc4tjam.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
     }
   ],
   "configuration_version": "1"

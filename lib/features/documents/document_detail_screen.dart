@@ -22,6 +22,8 @@ class DocumentDetailScreen extends StatefulWidget {
 
 class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
   PdfControllerPinch? _pdfController;
+  Future<String>? _imageUrlFuture;
+  File? _pdfPreviewFile;
 
   bool get _isPdf => widget.document.fileType == 'pdf';
 
@@ -30,39 +32,40 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
     super.initState();
     if (_isPdf) {
       _pdfController = PdfControllerPinch(
-        document: _openPdfFromUrl(widget.document.fileUrl),
+        document: _openPdfDocument(),
       );
+    } else {
+      _imageUrlFuture = FirebaseService.getDownloadUrl(widget.document);
     }
   }
 
-  Future<PdfDocument> _openPdfFromUrl(String url) async {
+  Future<PdfDocument> _openPdfDocument() async {
     final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/pdf_preview_${widget.document.id}.pdf');
-    if (!await file.exists()) {
-      final client = HttpClient();
-      final request = await client.getUrl(Uri.parse(url));
-      final response = await request.close();
-      final bytes = await response.fold<List<int>>([], (acc, chunk) => acc..addAll(chunk));
-      await file.writeAsBytes(bytes);
-      client.close();
-    }
+    final file = File(
+      '${dir.path}/pdf_preview_${widget.document.id}_${DateTime.now().millisecondsSinceEpoch}.pdf',
+    );
+    _pdfPreviewFile = file;
+    await FirebaseService.writeDocumentToFile(widget.document, file);
     return PdfDocument.openFile(file.path);
   }
 
   @override
   void dispose() {
     _pdfController?.dispose();
+    _pdfPreviewFile?.delete().catchError((_) => _pdfPreviewFile!);
     super.dispose();
   }
 
-  void _openFullscreen(BuildContext context) {
+  Future<void> _openFullscreen(BuildContext context) async {
+    final url = await (_imageUrlFuture ?? FirebaseService.getDownloadUrl(widget.document));
+    if (!context.mounted) return;
     Navigator.push(
       context,
       PageRouteBuilder(
         opaque: false,
         transitionDuration: const Duration(milliseconds: 280),
         pageBuilder: (ctx, anim, secondaryAnim) => _FullscreenImageViewer(
-          url: widget.document.fileUrl,
+          url: url,
           heroTag: 'doc-image-${widget.document.id}',
         ),
         transitionsBuilder: (ctx, animation, secondaryAnim, child) =>
@@ -73,12 +76,18 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final storageHint = widget.document.storagePath.toLowerCase();
+    final legacyUrl = (widget.document.fileUrl ?? '').toLowerCase();
     final isImage = !_isPdf &&
         (widget.document.fileType == 'image' ||
-            widget.document.fileUrl.contains('.jpg') ||
-            widget.document.fileUrl.contains('.jpeg') ||
-            widget.document.fileUrl.contains('.png') ||
-            widget.document.fileUrl.contains('.webp'));
+            storageHint.endsWith('.jpg') ||
+            storageHint.endsWith('.jpeg') ||
+            storageHint.endsWith('.png') ||
+            storageHint.endsWith('.webp') ||
+            legacyUrl.contains('.jpg') ||
+            legacyUrl.contains('.jpeg') ||
+            legacyUrl.contains('.png') ||
+            legacyUrl.contains('.webp'));
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -156,48 +165,52 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                 ),
               ),
             ] else if (isImage) ...[
-              GestureDetector(
-                onDoubleTap: () => _openFullscreen(context),
-                child: Hero(
-                  tag: 'doc-image-${widget.document.id}',
-                  child: InteractiveViewer(
-                    minScale: 0.1,
-                    maxScale: 4.0,
-                    child: Image.network(
-                      widget.document.fileUrl,
-                      width: double.infinity,
-                      fit: BoxFit.contain,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return Container(
-                          height: 300,
-                          alignment: Alignment.center,
-                          child: CircularProgressIndicator(
-                            value: loadingProgress.expectedTotalBytes != null
-                                ? loadingProgress.cumulativeBytesLoaded /
-                                    loadingProgress.expectedTotalBytes!
-                                : null,
-                          ),
-                        );
-                      },
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          height: 300,
-                          color: Colors.grey.shade100,
-                          alignment: Alignment.center,
-                          child: const Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.broken_image_outlined, size: 64, color: Colors.grey),
-                              SizedBox(height: 16),
-                              Text('Could not load image', style: TextStyle(color: Colors.grey)),
-                            ],
-                          ),
-                        );
-                      },
+              FutureBuilder<String>(
+                future: _imageUrlFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState != ConnectionState.done) {
+                    return Container(
+                      height: 300,
+                      alignment: Alignment.center,
+                      child: const CircularProgressIndicator(),
+                    );
+                  }
+                  if (!snapshot.hasData) {
+                    return _buildImageError();
+                  }
+
+                  return GestureDetector(
+                    onDoubleTap: () => _openFullscreen(context),
+                    child: Hero(
+                      tag: 'doc-image-${widget.document.id}',
+                      child: InteractiveViewer(
+                        minScale: 0.1,
+                        maxScale: 4.0,
+                        child: Image.network(
+                          snapshot.data!,
+                          width: double.infinity,
+                          fit: BoxFit.contain,
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Container(
+                              height: 300,
+                              alignment: Alignment.center,
+                              child: CircularProgressIndicator(
+                                value: loadingProgress.expectedTotalBytes != null
+                                    ? loadingProgress.cumulativeBytesLoaded /
+                                        loadingProgress.expectedTotalBytes!
+                                    : null,
+                              ),
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) {
+                            return _buildImageError();
+                          },
+                        ),
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
@@ -248,6 +261,22 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildImageError() {
+    return Container(
+      height: 300,
+      color: Colors.grey.shade100,
+      alignment: Alignment.center,
+      child: const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.broken_image_outlined, size: 64, color: Colors.grey),
+          SizedBox(height: 16),
+          Text('Could not load image', style: TextStyle(color: Colors.grey)),
+        ],
       ),
     );
   }

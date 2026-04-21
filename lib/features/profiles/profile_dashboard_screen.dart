@@ -50,7 +50,7 @@ class _ProfileDashboardScreenState extends State<ProfileDashboardScreen> {
         return;
       }
       final authenticated = await _localAuth.authenticate(
-        localizedReason: 'Authenticate to lock this vault',
+        localizedReason: 'Authenticate to hide this vault on this device',
       );
       if (authenticated && mounted) {
         setState(() => _isLocked = true);
@@ -66,7 +66,7 @@ class _ProfileDashboardScreenState extends State<ProfileDashboardScreen> {
   Future<void> _unlockWithBiometrics() async {
     try {
       final authenticated = await _localAuth.authenticate(
-        localizedReason: 'Authenticate to unlock this vault',
+        localizedReason: 'Authenticate to reveal this vault',
       );
       if (authenticated && mounted) setState(() => _isLocked = false);
     } catch (_) {}
@@ -120,7 +120,7 @@ class _ProfileDashboardScreenState extends State<ProfileDashboardScreen> {
   Future<void> _pickAndProcessDocument(AppProfile currentProfile) async {
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf'],
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf', 'heic', 'heif'],
     );
 
     if (result != null && result.files.single.path != null) {
@@ -176,22 +176,34 @@ class _ProfileDashboardScreenState extends State<ProfileDashboardScreen> {
           TextButton(onPressed: () => Navigator.of(context, rootNavigator: true).pop(), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
-              if (controller.text.isNotEmpty) {
-                try {
-                  Navigator.of(context, rootNavigator: true).pop(); // Immediate pop
-                  await FirebaseService.addCategory(currentProfile.id, controller.text);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Folder added!')),
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text('Failed to add folder. Please try again.')),
-                    );
-                  }
+              final name = controller.text.trim();
+              if (name.isEmpty) return;
+              if (name.length > 50) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Folder name must be 50 characters or less.')),
+                );
+                return;
+              }
+              if (RegExp(r'[<>:"/\\|?*]').hasMatch(name)) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Folder name contains invalid characters.')),
+                );
+                return;
+              }
+              try {
+                Navigator.of(context, rootNavigator: true).pop();
+                await FirebaseService.addCategory(currentProfile.id, name);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Folder added!')),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Failed to add folder. Please try again.')),
+                  );
                 }
               }
             },
@@ -220,7 +232,7 @@ class _ProfileDashboardScreenState extends State<ProfileDashboardScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.lock_outline),
-              title: const Text('Lock with Biometrics'),
+              title: const Text('Privacy Screen Lock'),
               onTap: _lockWithBiometrics,
             ),
             ListTile(
@@ -555,12 +567,13 @@ class _ProfileDashboardScreenState extends State<ProfileDashboardScreen> {
                             const Icon(Icons.lock_rounded, size: 64, color: Colors.white54),
                             const SizedBox(height: 24),
                             const Text(
-                              'Vault Locked',
+                              'Vault Hidden',
                               style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              currentProfile.name,
+                              '${currentProfile.name}\nSession lock enabled on this device',
+                              textAlign: TextAlign.center,
                               style: const TextStyle(color: Colors.white54, fontSize: 14),
                             ),
                             const SizedBox(height: 40),

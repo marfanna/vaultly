@@ -96,14 +96,25 @@ class FirebaseService {
       throw Exception('Access denied');
     }
 
-    final docs = await _firestore
+    final docsSnapshot = await _firestore
         .collection('documents')
         .where('profileId', isEqualTo: profileId)
         .get();
-    for (var doc in docs.docs) {
-      await doc.reference.delete();
+
+    final docs = docsSnapshot.docs
+        .map((doc) => AppDocument.fromFirestore(doc))
+        .toList(growable: false);
+
+    for (final doc in docs) {
+      await _deleteStoredDocument(doc);
     }
-    await _firestore.collection('profiles').doc(profileId).delete();
+
+    final batch = _firestore.batch();
+    for (final doc in docsSnapshot.docs) {
+      batch.delete(doc.reference);
+    }
+    batch.delete(_firestore.collection('profiles').doc(profileId));
+    await batch.commit();
   }
 
   static Future<void> addCategory(String profileId, String category) async {
@@ -138,8 +149,8 @@ class FirebaseService {
       }
 
       final ref = _storage.ref().child(path);
-      final taskSnapshot = await ref.putFile(uploadFile);
-      return await taskSnapshot.ref.getDownloadURL();
+      await ref.putFile(uploadFile);
+      return path;
     } on FirebaseException {
       rethrow;
     } finally {
@@ -151,6 +162,38 @@ class FirebaseService {
 
   static Future<void> saveDocument(AppDocument doc) async {
     await _firestore.collection('documents').add(doc.toMap());
+  }
+
+  static Reference _storageRefForDocument(AppDocument doc) {
+    if (doc.storagePath.isNotEmpty) {
+      return _storage.ref().child(doc.storagePath);
+    }
+    if (doc.fileUrl != null && doc.fileUrl!.isNotEmpty) {
+      return _storage.refFromURL(doc.fileUrl!);
+    }
+    throw Exception('Document is missing a storage reference.');
+  }
+
+  static Future<void> _deleteStoredDocument(AppDocument doc) async {
+    try {
+      await _storageRefForDocument(doc).delete();
+    } on FirebaseException catch (e) {
+      if (e.code != 'object-not-found') {
+        rethrow;
+      }
+    }
+  }
+
+  static Future<String> getDownloadUrl(AppDocument doc) async {
+    return _storageRefForDocument(doc).getDownloadURL();
+  }
+
+  static Future<File> writeDocumentToFile(AppDocument doc, File target) async {
+    final task = await _storageRefForDocument(doc).writeToFile(target);
+    if (task.state != TaskState.success) {
+      throw Exception('Could not download document for preview.');
+    }
+    return target;
   }
 
   static Stream<List<AppDocument>> streamDocuments(
@@ -251,14 +294,8 @@ class FirebaseService {
     if (uid == null) throw Exception('User not authenticated');
     if (doc.userId != uid) throw Exception('Access denied');
 
+    await _deleteStoredDocument(doc);
     await _firestore.collection('documents').doc(doc.id).delete();
-
-    try {
-      final ref = _storage.refFromURL(doc.fileUrl);
-      await ref.delete();
-    } on FirebaseException {
-      // Storage delete is best-effort; Firestore record is already removed.
-    }
   }
 
   static Future<void> toggleDocumentStar(AppDocument doc) async {

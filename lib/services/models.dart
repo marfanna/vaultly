@@ -56,7 +56,8 @@ class AppDocument {
   final String id;
   final String userId;
   final String profileId;
-  final String fileUrl;
+  final String storagePath;
+  final String? fileUrl;
   final String fileType;
   final String category;
   final String fileName;
@@ -68,7 +69,8 @@ class AppDocument {
     required this.id,
     required this.userId,
     required this.profileId,
-    required this.fileUrl,
+    required this.storagePath,
+    this.fileUrl,
     required this.fileType,
     required this.category,
     required this.fileName,
@@ -78,10 +80,10 @@ class AppDocument {
   });
 
   Map<String, dynamic> toMap() {
-    return {
+    final data = {
       'userId': userId,
       'profileId': profileId,
-      'fileUrl': fileUrl,
+      'storagePath': storagePath,
       'fileType': fileType,
       'category': category,
       'fileName': fileName,
@@ -89,6 +91,12 @@ class AppDocument {
       'expiryDate': expiryDate != null ? Timestamp.fromDate(expiryDate!) : null,
       'isStarred': isStarred,
     };
+
+    if (fileUrl != null && fileUrl!.isNotEmpty) {
+      data['fileUrl'] = fileUrl!;
+    }
+
+    return data;
   }
 
   factory AppDocument.fromFirestore(DocumentSnapshot doc) {
@@ -97,7 +105,8 @@ class AppDocument {
       id: doc.id,
       userId: data['userId'] as String? ?? '',
       profileId: data['profileId'] as String? ?? '',
-      fileUrl: data['fileUrl'] as String? ?? '',
+      storagePath: data['storagePath'] as String? ?? '',
+      fileUrl: data['fileUrl'] as String?,
       fileType: data['fileType'] as String? ?? 'image',
       category: data['category'] as String? ?? 'Personal',
       fileName: data['fileName'] as String? ?? doc.id,

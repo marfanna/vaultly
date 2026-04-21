@@ -133,12 +133,12 @@ class _SplashScreenState extends State<SplashScreen>
                       children: [
                         _GetStartedButton(onTap: _onGetStarted),
                         const SizedBox(height: 20),
-                        Center(
-                          child: Text(
-                            'Your data stays on your device.',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.22),
-                              fontSize: 12,
+                          Center(
+                            child: Text(
+                              'Encrypted cloud sync with access controlled by your account.',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.22),
+                                fontSize: 12,
                               letterSpacing: 0.3,
                             ),
                           ),

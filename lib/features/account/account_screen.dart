@@ -337,7 +337,7 @@ class _HelpScreen extends StatelessWidget {
           ),
           _FaqTile(
             question: 'Are my documents secure?',
-            answer: 'Yes. Documents are stored in Firebase Storage and protected by security rules — only you can access your files.',
+            answer: 'Documents are stored in Firebase cloud storage and access is restricted to your signed-in account by app security rules.',
           ),
           _FaqTile(
             question: 'What is the Alerts section?',
@@ -345,7 +345,7 @@ class _HelpScreen extends StatelessWidget {
           ),
           _FaqTile(
             question: 'Can I lock the app with biometrics?',
-            answer: 'Yes. Inside any profile, tap the ⋮ menu and choose "Lock with Biometrics".',
+            answer: 'You can hide an open profile with a biometric privacy screen for the current session from the ⋮ menu inside that profile.',
           ),
         ],
       ),

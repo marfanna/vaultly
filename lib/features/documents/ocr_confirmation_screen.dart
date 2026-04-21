@@ -247,20 +247,22 @@ class _OCRConfirmationScreenState extends State<OCRConfirmationScreen> {
     try {
       final profileId = widget.profile.id;
       if (profileId.isEmpty) throw Exception('Profile ID is missing.');
+      if (widget.profile.userId != uid) throw Exception('Access denied.');
 
       final cleanName = FirebaseService.sanitizePath(_nameController.text.trim());
       final safeCategory = FirebaseService.sanitizePath(_category);
       final uniqueFileName = '${DateTime.now().millisecondsSinceEpoch}_$cleanName';
       final storagePath =
-          'vault/${widget.profile.section.name}/$profileId/$safeCategory/$uniqueFileName';
+          'users/$uid/vault/${widget.profile.section.name}/$profileId/$safeCategory/$uniqueFileName';
 
-      final fileUrl = await FirebaseService.uploadFile(widget.file, storagePath);
+      final savedStoragePath =
+          await FirebaseService.uploadFile(widget.file, storagePath);
 
       final doc = AppDocument(
         id: '',
         userId: uid,
         profileId: profileId,
-        fileUrl: fileUrl,
+        storagePath: savedStoragePath,
         fileType: widget.fileType,
         category: _category,
         fileName: _nameController.text.trim(),

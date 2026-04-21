@@ -1,5 +1,5 @@
 name: vaultly
-description: "A new Flutter project."
+description: "Vaultly — secure digital vault for storing and managing your important documents."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -28,6 +28,7 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
+  flutter_skill: ^0.2.6
   flutter:
     sdk: flutter
 
@@ -109,3 +110,11 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/images/vaultly_logo.png"
+  min_sdk_android: 21 # android min sdk min:16, default 21
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/images/vaultly_logo.png"
